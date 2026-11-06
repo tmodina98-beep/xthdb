@@ -1,0 +1,475 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Червячный сортировщик</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Unbounded:wght@600;800&display=swap">
+<style>
+/* Layout: one centred notebook-paper game card; round pips and score on top, a specimen plate in the middle, three dashed bins below. */
+:root {
+  --bg: #f4f9e3; --surface: #fffefa; --fg: #25341a; --muted: #5d6e4f;
+  --line: #a9c24f; --grid: rgba(111,154,28,.11);
+  --g: #6f9a1c; --gs: #e3f1b5;
+  --p: #c2337c; --ps: #fde1ee; --pb: #e58ab4;
+  --c: #b8742f; --cs: #fbe5c8; --cb: #e0a45f;
+  --ok: #3f8a1f; --bad: #c63b3b; --on-p: #ffffff;
+  --art: #fbfdf0;
+  --disp: "Unbounded", "Nunito", system-ui, sans-serif;
+  --body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121a0f; --surface: #1b2716; --fg: #ecf4dc; --muted: #a7b896;
+    --line: #55702a; --grid: rgba(166,207,90,.07);
+    --g: #a6cf5a; --gs: #2a3b1d;
+    --p: #f08cbc; --ps: #3a1d2b; --pb: #8a4468;
+    --c: #f0b886; --cs: #3b2b1a; --cb: #8a6232;
+    --ok: #8fd35a; --bad: #ff9a9a; --on-p: #2a0f1d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121a0f; --surface: #1b2716; --fg: #ecf4dc; --muted: #a7b896;
+  --line: #55702a; --grid: rgba(166,207,90,.07);
+  --g: #a6cf5a; --gs: #2a3b1d;
+  --p: #f08cbc; --ps: #3a1d2b; --pb: #8a4468;
+  --c: #f0b886; --cs: #3b2b1a; --cb: #8a6232;
+  --ok: #8fd35a; --bad: #ff9a9a; --on-p: #2a0f1d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 26px 26px;
+  color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.4;
+  padding-block: 16px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  min-height: 100vh;
+}
+.app { max-width: 520px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--p); outline-offset: 3px; }
+
+/* top bar */
+.top { display: flex; flex-direction: column; gap: 10px; }
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.tag { font-family: var(--disp); font-weight: 800; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--g); color: var(--surface); padding: 7px 14px; border-radius: 999px; }
+.stats { display: flex; align-items: center; gap: 12px; }
+.score { font-family: var(--disp); font-weight: 800; font-size: 1rem; font-variant-numeric: tabular-nums; }
+.score small { font-family: var(--body); font-weight: 700; font-size: .7rem; color: var(--muted); margin-right: 4px; text-transform: uppercase; letter-spacing: .06em; }
+.hearts { display: flex; gap: 3px; }
+.hearts svg { width: 22px; height: 22px; display: block; }
+.pips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.pip { height: 8px; border-radius: 999px; border: 2px dashed var(--line); }
+.pip.done { background: var(--g); border: 2px solid var(--g); }
+.pip.now { background: var(--pb); border: 2px solid var(--pb); }
+
+/* panels */
+.panel { background: var(--surface); border: 2px dashed var(--line); border-radius: 22px; padding: 18px; }
+.rhead { display: flex; flex-direction: column; gap: 2px; }
+.rname { font-weight: 800; font-size: 1.05rem; }
+.hint { margin: 0; color: var(--muted); font-weight: 600; font-size: .92rem; }
+
+.card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  min-height: 250px; justify-content: center; animation: pop .35s ease-out; }
+.eyebrow { align-self: flex-start; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--p); }
+.count { position: absolute; top: 14px; right: 16px; font-size: .78rem; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+.plate { width: 100%; max-width: 300px; aspect-ratio: 8 / 5; background: var(--art); border-radius: 16px; border: 2px solid var(--gs); }
+.plate svg { width: 100%; height: 100%; display: block; }
+.label { font-weight: 800; font-size: 1.2rem; line-height: 1.25; text-wrap: balance; max-width: 30ch; }
+.clue { font-weight: 800; font-size: 1.22rem; line-height: 1.3; text-wrap: balance; max-width: 28ch; padding-block: 18px; }
+.card.right { animation: fly .5s ease-in forwards; }
+.card.wrong { animation: shake .4s; }
+@keyframes pop { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fly { to { transform: translateY(26px) scale(.9); opacity: .35; } }
+@keyframes shake { 20%, 60% { transform: translateX(-7px); } 40%, 80% { transform: translateX(7px); } }
+
+/* bins */
+.bins { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.bin { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 18px;
+  border: 2px dashed; font-weight: 800; font-size: .95rem; min-width: 0; position: relative; transition: transform .12s; }
+.bin:hover:not(:disabled) { transform: translateY(-2px); }
+.bin:disabled { cursor: default; }
+.bin svg { width: 54px; height: 30px; }
+.bin kbd { position: absolute; top: 6px; left: 8px; font: 800 .68rem var(--body); color: var(--muted); }
+.bin.k { background: var(--gs); border-color: var(--g); }
+.bin.p { background: var(--ps); border-color: var(--pb); }
+.bin.n { background: var(--cs); border-color: var(--cb); }
+.bin.key-right { outline: 4px solid var(--ok); outline-offset: 2px; }
+.bin.key-wrong { opacity: .55; }
+
+/* feedback */
+.fb { min-height: 104px; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; justify-content: center;
+  border: 2px dashed var(--line); background: var(--surface); }
+.fb.idle { color: var(--muted); font-weight: 700; font-size: .9rem; align-items: center; text-align: center; }
+.fb .head { font-weight: 800; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.fb .ok { color: var(--ok); } .fb .bad { color: var(--bad); }
+.fb .combo { font-size: .8rem; color: var(--p); }
+.fb p { margin: 0; font-size: .92rem; font-weight: 600; color: var(--muted); }
+.btn { font-family: var(--disp); font-weight: 800; font-size: .82rem; letter-spacing: .03em; border: 0; border-radius: 999px;
+  padding: 12px 22px; background: var(--p); color: var(--on-p); align-self: flex-start; }
+.btn.alt { background: transparent; color: var(--fg); border: 2px dashed var(--line); }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* start / result */
+.hero { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+h1 { font-family: var(--disp); font-weight: 800; font-size: clamp(1.45rem, 6.4vw, 2rem); line-height: 1.12; margin: 0; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--p); }
+.lead { margin: 0; font-weight: 600; color: var(--muted); max-width: 44ch; }
+.legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+.legend .bin { cursor: default; font-size: .9rem; }
+.rules { margin: 0; padding-left: 18px; font-weight: 600; font-size: .92rem; color: var(--muted); display: grid; gap: 3px; }
+.stars { display: flex; gap: 6px; }
+.stars svg { width: 44px; height: 44px; }
+.big { font-family: var(--disp); font-weight: 800; font-size: 2.2rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.rank { font-family: var(--disp); font-weight: 800; font-size: 1.15rem; color: var(--p); }
+.best { font-weight: 700; font-size: .85rem; color: var(--muted); }
+.note { font-size: .8rem; color: var(--muted); font-weight: 600; text-align: center; margin: 0; }
+
+@media (max-width: 400px) {
+  .panel { padding: 14px; }
+  .bin { font-size: .86rem; } .bin svg { width: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .card.right, .card.wrong { animation: none; }
+  .bin { transition: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <div class="top" id="top"></div>
+  <main id="view"></main>
+</div>
+
+<script>
+(function () {
+  /* ---------- artwork: specimen-plate pictograms (fixed colours, drawn on a light plate in both themes) ---------- */
+  var INK = '#4a3d2e';
+  function svg(inner) { return '<svg viewBox="0 0 160 100" aria-hidden="true">' + inner + '</svg>'; }
+  function tube(d, w, fill, edge, extra) {
+    return '<path d="' + d + '" fill="none" stroke="' + edge + '" stroke-width="' + (w + 3) + '" stroke-linecap="round" stroke-linejoin="round"/>' +
+           '<path d="' + d + '" fill="none" stroke="' + fill + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round" ' + (extra || '') + '/>';
+  }
+  function dot(x, y, r, f) { return '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + (f || INK) + '"/>'; }
+  function line(x1, y1, x2, y2, c, w) { return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + c + '" stroke-width="' + (w || 2) + '" stroke-linecap="round"/>'; }
+
+  function earth() {
+    var d = 'M16 72 C 42 18, 74 92, 98 50 S 134 36, 146 58';
+    return svg(tube(d, 13, '#d98a73', '#9a5444') +
+      '<path d="' + d + '" fill="none" stroke="#9a5444" stroke-opacity=".45" stroke-width="12" stroke-dasharray="1.5 6.5"/>' +
+      '<path d="' + d + '" fill="none" stroke="#efb3a8" stroke-width="15" stroke-dasharray="0 46 20 600"/>' + dot(20, 66, 1.6));
+  }
+  function bristle(variant) {
+    var s = '', i, x, body = variant ? '#b86b8e' : '#e48d63', edge = variant ? '#7c3d5c' : '#a8532f';
+    for (i = 0; i < 8; i++) {
+      x = 36 + i * 13;
+      s += line(x, 49, x - 5, 36, edge, 2) + line(x, 59, x - 5, 72, edge, 2) +
+           line(x - 2, 45, x - 8, 39, edge, 1.4) + line(x - 2, 63, x - 8, 69, edge, 1.4);
+    }
+    if (variant) { for (i = 0; i < 4; i++) { x = 60 + i * 12; s += '<path d="M' + x + ' 48 q -3 -12 -8 -14 M' + x + ' 48 q 2 -12 4 -16" fill="none" stroke="#d6455a" stroke-width="2" stroke-linecap="round"/>'; } }
+    s += tube('M22 54 L146 54', 12, body, edge);
+    s += '<path d="M22 54 L146 54" stroke="' + edge + '" stroke-opacity=".4" stroke-width="11" stroke-dasharray="1.5 7.5"/>';
+    s += '<circle cx="20" cy="54" r="8" fill="' + body + '" stroke="' + edge + '" stroke-width="2.5"/>' + dot(17, 51, 1.8) + dot(17, 57, 1.8) +
+         line(14, 49, 6, 41, edge, 1.8) + line(14, 59, 6, 67, edge, 1.8);
+    return svg(s);
+  }
+  function leech() {
+    return svg('<path d="M26 56 C 40 36, 100 36, 134 50 C 140 53, 140 57, 134 60 C 100 74, 40 72, 26 56Z" fill="#4a3d58" stroke="#2b2236" stroke-width="3"/>' +
+      '<path d="M34 55 C 70 49, 100 51, 128 55" fill="none" stroke="#e08a4a" stroke-width="2.4" stroke-dasharray="5 5" stroke-linecap="round"/>' +
+      '<ellipse cx="24" cy="56" rx="7" ry="9" fill="#7a6a8c" stroke="#2b2236" stroke-width="2.5"/><ellipse cx="139" cy="55" rx="8" ry="6.5" fill="#7a6a8c" stroke="#2b2236" stroke-width="2.5"/>' +
+      '<path d="M20 56 h8" stroke="#2b2236" stroke-width="2.4" stroke-linecap="round"/>');
+  }
+  function planaria() {
+    return svg('<path d="M24 50 L12 39 L32 44Z M24 50 L12 61 L32 56Z" fill="#cba38f" stroke="#8d6a58" stroke-width="2.5" stroke-linejoin="round"/>' +
+      '<path d="M22 50 C 44 36, 96 38, 132 47 C 148 51, 148 53, 132 57 C 96 66, 44 64, 22 50Z" fill="#cba38f" stroke="#8d6a58" stroke-width="3"/>' +
+      '<path d="M66 52 L102 52" stroke="#8d6a58" stroke-width="5" stroke-linecap="round" stroke-opacity=".55"/>' +
+      '<circle cx="36" cy="46.5" r="4" fill="#fff"/><circle cx="36" cy="53.5" r="4" fill="#fff"/>' + dot(37, 47, 1.8) + dot(37, 53, 1.8));
+  }
+  function fluke() {
+    var s = '<path d="M80 10 C 116 24 122 66 80 92 C 38 66 44 24 80 10Z" fill="#d98066" stroke="#98472f" stroke-width="3"/>', i;
+    for (i = -2; i <= 2; i++) { s += '<path d="M80 52 Q ' + (80 + i * 14) + ' 66 ' + (80 + i * 17) + ' 80" fill="none" stroke="#98472f" stroke-opacity=".5" stroke-width="2"/>'; }
+    s += '<circle cx="80" cy="24" r="7" fill="#f3d2c4" stroke="#98472f" stroke-width="2.5"/><circle cx="80" cy="44" r="5.5" fill="#f3d2c4" stroke="#98472f" stroke-width="2.5"/>';
+    return svg(s);
+  }
+  function tape(o) {
+    var s = '', i, x, h, y, f = o.fill, e = o.edge;
+    for (i = 0; i < o.n; i++) {
+      x = o.x0 + i * o.step; h = o.h0 + (o.h1 - o.h0) * i / Math.max(1, o.n - 1); y = 50 - h / 2 + Math.sin(i * .75) * o.wob;
+      s += '<rect x="' + x + '" y="' + y + '" width="' + (o.step - 2) + '" height="' + h + '" rx="2.5" fill="' + f + '" stroke="' + e + '" stroke-width="2"/>';
+      if (o.rosette) { s += dot(x + (o.step - 2) / 2, y + h / 2, 2.4, e); }
+    }
+    s += line(o.x0 - 12, 50, o.x0 + 2, 50, e, 3);
+    s += '<circle cx="' + (o.x0 - 20) + '" cy="50" r="' + o.sc + '" fill="' + f + '" stroke="' + e + '" stroke-width="2.5"/>';
+    s += dot(o.x0 - 23, 46, 1.6) + dot(o.x0 - 17, 46, 1.6) + dot(o.x0 - 23, 54, 1.6) + dot(o.x0 - 17, 54, 1.6);
+    return svg(s);
+  }
+  function nema(d, w, fill, edge, extra) { return svg(tube(d, w, fill, edge) + (extra || '')); }
+  var ART = {
+    earth: earth, nereis: function () { return bristle(false); }, lug: function () { return bristle(true); }, leech: leech,
+    planaria: planaria, fluke: fluke,
+    bovine: function () { return tape({ n: 9, step: 13, x0: 40, h0: 8, h1: 22, wob: 4, fill: '#ecd9a8', edge: '#a8925a', sc: 9 }); },
+    echino: function () { return tape({ n: 4, step: 15, x0: 56, h0: 8, h1: 20, wob: 2, fill: '#efdcc4', edge: '#a88a62', sc: 8 }); },
+    broad: function () { return tape({ n: 10, step: 12, x0: 34, h0: 26, h1: 26, wob: 3, fill: '#e8d6a2', edge: '#a8925a', sc: 9, rosette: true }); },
+    ascaris: function () { return nema('M16 70 C 50 20, 80 95, 112 48 S 150 30, 146 58', 9, '#efc77a', '#a67b2b', '<path d="M16 70 C 50 20, 80 95, 112 48" fill="none" stroke="#fff2cf" stroke-opacity=".55" stroke-width="2.5" stroke-linecap="round"/>'); },
+    pinworm: function () { return nema('M50 64 C 70 42, 100 40, 118 56', 5, '#f6f0e0', '#8a7e66', '<path d="M118 56 L134 66" stroke="#8a7e66" stroke-width="2" stroke-linecap="round"/>'); },
+    whip: function () { return svg(tube('M18 40 C 46 24, 70 54, 92 50', 2.5, '#e9d8b4', '#8a7658') + tube('M92 50 C 112 46, 128 66, 144 62', 9, '#e9d8b4', '#8a7658')); },
+    trich: function () { return nema('M60 50 C 60 28, 104 28, 104 50 C 104 68, 70 68, 70 52 C 70 42, 92 42, 92 51', 5, '#e8c9c0', '#8a5a50', '<ellipse cx="82" cy="50" rx="46" ry="30" fill="none" stroke="#b9a3d9" stroke-width="2.5" stroke-dasharray="3 4"/>'); },
+    guinea: function () { return nema('M12 78 C 30 20, 50 20, 60 55 S 90 100, 104 55 S 130 16, 148 48', 6, '#efe2c4', '#8f7c58'); }
+  };
+  function slice(inner) { return svg(inner); }
+  ART.coelom = function () {
+    return slice('<circle cx="80" cy="50" r="42" fill="#fbe3ee" stroke="#7da21f" stroke-width="6"/><circle cx="80" cy="50" r="35" fill="#fff6e0" stroke="#e07aa8" stroke-width="4"/>' +
+      line(80, 36, 80, 16, '#e07aa8', 3) + line(80, 64, 80, 84, '#e07aa8', 3) +
+      '<circle cx="80" cy="50" r="15" fill="#e3f1b5" stroke="#e07aa8" stroke-width="5"/><circle cx="80" cy="50" r="7" fill="#fff6e0" stroke="#7da21f" stroke-width="2"/>');
+  };
+  ART.pseudo = function () {
+    var s = '<circle cx="80" cy="50" r="42" fill="#fff6e0" stroke="#7da21f" stroke-width="6"/>', i, a, x, y;
+    for (i = 0; i < 4; i++) { a = i * 1.571 + .6; x = 80 + Math.cos(a) * 30; y = 50 + Math.sin(a) * 30; s += '<ellipse cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" rx="10" ry="6" transform="rotate(' + (a * 57.3 + 90).toFixed(0) + ' ' + x.toFixed(1) + ' ' + y.toFixed(1) + ')" fill="#b9a3d9" stroke="#7c68a8" stroke-width="2"/>'; }
+    return slice(s + '<circle cx="80" cy="50" r="14" fill="#e3f1b5" stroke="#7da21f" stroke-width="4"/><circle cx="80" cy="50" r="6" fill="#fff6e0"/>');
+  };
+  ART.parenchyma = function () {
+    var s = '<ellipse cx="80" cy="50" rx="56" ry="32" fill="#fbe3ee" stroke="#7da21f" stroke-width="6"/>', i;
+    for (i = 0; i < 14; i++) { s += dot(34 + (i * 37) % 92, 28 + (i * 53) % 44, 2.2, '#e07aa8'); }
+    return slice(s + '<circle cx="80" cy="50" r="9" fill="#fff6e0" stroke="#7da21f" stroke-width="3"/>');
+  };
+  ART.bilateral = function () {
+    return slice('<path d="M80 10 C 112 22 112 70 80 92 C 48 70 48 22 80 10Z" fill="#e3f1b5" stroke="#7da21f" stroke-width="3.5"/>' +
+      '<line x1="80" y1="2" x2="80" y2="98" stroke="#e07aa8" stroke-width="2.5" stroke-dasharray="5 4"/>' +
+      '<circle cx="70" cy="28" r="3.6" fill="#fff" stroke="' + INK + '" stroke-width="1.5"/><circle cx="90" cy="28" r="3.6" fill="#fff" stroke="' + INK + '" stroke-width="1.5"/>' +
+      '<path d="M66 56 q 8 -8 0 -16 M94 56 q -8 -8 0 -16" fill="none" stroke="#7da21f" stroke-width="2"/>' +
+      '<path d="M122 40 l -8 6 l 8 6 M38 40 l 8 6 l -8 6" fill="none" stroke="#e07aa8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>');
+  };
+  ART.layers = function () {
+    return slice('<rect x="22" y="12" width="116" height="24" rx="8" fill="#e3f1b5" stroke="#7da21f" stroke-width="2.5"/><rect x="22" y="38" width="116" height="24" rx="8" fill="#fbc9de" stroke="#e07aa8" stroke-width="3.5"/><rect x="22" y="64" width="116" height="24" rx="8" fill="#d9ecb0" stroke="#7da21f" stroke-width="2.5"/>' +
+      '<g font-family="Nunito, sans-serif" font-weight="800" font-size="11" fill="' + INK + '" text-anchor="middle"><text x="80" y="28">эктодерма</text><text x="80" y="54">мезодерма</text><text x="80" y="80">энтодерма</text></g>');
+  };
+  ART.muscle = function () {
+    return slice('<ellipse cx="80" cy="50" rx="58" ry="34" fill="none" stroke="#7da21f" stroke-width="5"/><ellipse cx="80" cy="50" rx="48" ry="26" fill="none" stroke="#e07aa8" stroke-width="4" stroke-dasharray="2 5"/>' +
+      '<ellipse cx="80" cy="50" rx="39" ry="19" fill="none" stroke="#b9a3d9" stroke-width="4" stroke-dasharray="9 4"/><ellipse cx="80" cy="50" rx="29" ry="12" fill="#fbe3ee" stroke="#7da21f" stroke-width="2.5"/>');
+  };
+  ART.anus = function () {
+    return slice('<path d="M22 36 H138 V64 H22" fill="#e3f1b5" stroke="#7da21f" stroke-width="4" stroke-linecap="round"/>' +
+      '<g fill="none" stroke="#e07aa8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 50 H28 M20 42 l8 8 l-8 8"/><path d="M132 50 H154 M146 42 l8 8 l-8 8"/><path d="M52 50 H108 M98 43 l9 7 l-9 7"/></g>');
+  };
+  ART.dioecious = function () {
+    return slice('<path d="M14 62 C 40 40, 70 80, 98 52" fill="none" stroke="#d6a43c" stroke-width="9" stroke-linecap="round"/><path d="M14 80 C 44 66, 72 92, 104 78 C 118 72, 124 82, 118 90" fill="none" stroke="#d6a43c" stroke-width="7" stroke-linecap="round"/>' +
+      '<g font-family="Nunito, sans-serif" font-weight="800" font-size="30" fill="#c2337c" style="font-variant-emoji:text"><text x="112" y="46">♀</text></g><g font-family="Nunito, sans-serif" font-weight="800" font-size="30" fill="#4d7a1d" style="font-variant-emoji:text"><text x="118" y="96">♂</text></g>');
+  };
+  ART.parapodia = function () {
+    var s = '<ellipse cx="80" cy="50" rx="46" ry="14" fill="#e48d63" stroke="#a8532f" stroke-width="3"/>', i, a;
+    [-1, 1].forEach(function (d) {
+      s += '<path d="M62 ' + (50 + d * 12) + ' q 18 ' + (d * 20) + ' 36 0" fill="#f0a97f" stroke="#a8532f" stroke-width="3"/>';
+      for (i = 0; i < 7; i++) { a = (i - 3) * .26; s += line(80 + Math.sin(a) * 8, 50 + d * 22, 80 + Math.sin(a) * 36, 50 + d * (40 - Math.abs(i - 3) * 2), '#a8532f', 1.8); }
+    });
+    return slice(s);
+  };
+  ART.blood = function () {
+    var s = '<path d="M10 34 H150" stroke="#d4505a" stroke-width="5" stroke-linecap="round"/><path d="M10 66 H150" stroke="#d4505a" stroke-width="5" stroke-linecap="round"/>', i;
+    for (i = 0; i < 6; i++) { s += '<ellipse cx="' + (30 + i * 20) + '" cy="50" rx="6" ry="16" fill="none" stroke="#d4505a" stroke-width="3.5"/>'; }
+    s += '<path d="M60 26 l -10 8 l 10 8 M110 74 l 10 -8 l -10 -8" fill="none" stroke="#7da21f" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>';
+    return slice(s);
+  };
+
+  /* small bin icons */
+  var BIN = {
+    K: '<svg viewBox="0 0 54 30" aria-hidden="true"><path d="M5 18 C 15 4, 24 28, 33 14 S 46 10, 50 18" fill="none" stroke="#7da21f" stroke-width="9" stroke-linecap="round"/><path d="M5 18 C 15 4, 24 28, 33 14 S 46 10, 50 18" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="9" stroke-dasharray="1.5 5"/></svg>',
+    P: '<svg viewBox="0 0 54 30" aria-hidden="true"><path d="M4 15 C 14 4, 36 4, 50 13 C 54 15, 54 16, 50 18 C 36 27, 14 26, 4 15Z" fill="#e07aa8" stroke="#b84a80" stroke-width="2.5"/></svg>',
+    N: '<svg viewBox="0 0 54 30" aria-hidden="true"><path d="M4 22 C 16 4, 28 26, 38 12 S 48 10, 50 14" fill="none" stroke="#d6a43c" stroke-width="5" stroke-linecap="round"/></svg>'
+  };
+  var TYPES = {
+    K: { n: 'Кольчатые', c: 'k', key: '1' },
+    P: { n: 'Плоские', c: 'p', key: '2' },
+    N: { n: 'Круглые', c: 'n', key: '3' }
+  };
+
+  /* ---------- rounds ---------- */
+  var ROUNDS = [
+    { name: 'Кто есть кто', eyebrow: 'Червь на рисунке', hint: 'Посмотри на рисунок и выбери тип червя.', cards: [
+      { art: 'earth', label: 'Дождевой червь', t: 'K', why: 'Малощетинковый кольчец: тело из члеников, есть поясок и вторичная полость.' },
+      { art: 'nereis', label: 'Нереида', t: 'K', why: 'Многощетинковый кольчец: на каждом сегменте параподии с пучками щетинок.' },
+      { art: 'leech', label: 'Пиявка', t: 'K', why: 'Кольчатые черви: две присоски, гирудин в железах головы.' },
+      { art: 'planaria', label: 'Белая планария', t: 'P', why: 'Ресничный плоский червь: тело уплощено, анального отверстия нет.' },
+      { art: 'fluke', label: 'Печёночный сосальщик', t: 'P', why: 'Плоский червь-паразит с двумя присосками. Промежуточный хозяин: малый прудовик.' },
+      { art: 'bovine', label: 'Бычий цепень', t: 'P', why: 'Ленточный плоский червь: тело из проглоттид, пищеварительной системы нет.' },
+      { art: 'ascaris', label: 'Аскарида', t: 'N', why: 'Нематода: несегментированное тело, плотная кутикула, самец с загнутым хвостом.' },
+      { art: 'pinworm', label: 'Острица', t: 'N', why: 'Круглый червь (2–12 мм). Паразитирует в толстой кишке, вызывает энтеробиоз.' },
+      { art: 'whip', label: 'Власоглав', t: 'N', why: 'Круглый червь, кишечный паразит человека.' }
+    ] },
+    { name: 'Ароморфозы', eyebrow: 'Ароморфоз', hint: 'У какого типа червей это приспособление появилось впервые?', cards: [
+      { art: 'coelom', label: 'Вторичная полость тела (целом)', t: 'K', why: 'Целом имеет свою эпителиальную выстилку и заполнен жидкостью. Это ароморфоз кольчатых.' },
+      { art: 'parapodia', label: 'Параподии', t: 'K', why: 'Первые конечности. Появились у многощетинковых кольчецов.' },
+      { art: 'blood', label: 'Замкнутая кровеносная система', t: 'K', why: 'Кровь течёт по сосудам, сердца нет. Впервые у кольчатых червей.' },
+      { art: 'bilateral', label: 'Двусторонняя симметрия', t: 'P', why: 'Одна плоскость симметрии. Ароморфоз плоских червей.' },
+      { art: 'layers', label: 'Мезодерма: третий зародышевый листок', t: 'P', why: 'Плоские черви стали трёхслойными животными.' },
+      { art: 'muscle', label: 'Кожно-мускульный мешок', t: 'P', why: 'Покровы и три слоя мышц (кольцевые, косые, продольные) вместе. Плоские черви.' },
+      { art: 'pseudo', label: 'Первичная полость тела (псевдоцель)', t: 'N', why: 'Полость между кишкой и стенкой тела без собственной выстилки. Круглые черви.' },
+      { art: 'anus', label: 'Сквозная кишка с анальным отверстием', t: 'N', why: 'Пищеварение начинается ртом и заканчивается анусом. Ароморфоз круглых червей.' },
+      { art: 'dioecious', label: 'Раздельнополость и половой диморфизм', t: 'N', why: 'Самцы и самки различаются. Например, хвост самца аскариды загнут.' }
+    ] },
+    { name: 'Органы и системы', eyebrow: 'Признак', hint: 'Какому типу принадлежит этот признак?', cards: [
+      { clue: 'Метанефридии: парные органы выделения в виде железистых трубок', t: 'K', why: 'Выделительная система кольчатых червей.' },
+      { clue: 'Брюшная нервная цепочка с узлами в каждом сегменте', t: 'K', why: 'Узловая нервная система впервые возникла у кольчатых.' },
+      { clue: 'Жидкость целома работает как гидроскелет', t: 'K', why: 'У кольчатых целом выполняет опорную, транспортную и защитную функции.' },
+      { clue: 'Протонефридии со звёздчатыми клетками и пучком ресничек', t: 'P', why: 'Мерцательное пламя: выделительная система плоских червей.' },
+      { clue: 'Паренхима заполняет всё пространство между органами', t: 'P', why: 'Настоящей полости тела у плоских червей нет.' },
+      { clue: 'Кишечник открывается наружу только ртом', t: 'P', why: 'У плоских червей непереваренные остатки выходят через рот.' },
+      { clue: 'Окологлоточное нервное кольцо и продольные нервные стволы', t: 'N', why: 'Нервная система круглых червей стволового типа.' },
+      { clue: 'Два боковых выделительных канала с отверстием на брюшной стороне', t: 'N', why: 'Особые клетки выделения нематод.' },
+      { clue: 'Тело несегментировано и покрыто плотной кутикулой', t: 'N', why: 'Нематоды. Кутикула защищает паразитов в кишечнике хозяина.' }
+    ] },
+    { name: 'Кто виноват?', eyebrow: 'Описание', hint: 'О каком черве речь? Выбери его тип.', cards: [
+      { clue: 'Гермафродит. Яйца откладывает в слизистую муфту, которую выделяет поясок', t: 'K', why: 'Дождевой червь: малощетинковые кольчатые.' },
+      { clue: 'Раздельнополый, оплодотворение наружное, в воде. Из яйца выходит личинка-трохофора', t: 'K', why: 'Многощетинковые кольчатые (полихеты).' },
+      { clue: 'Выделяет гирудин, и кровь после укуса не сворачивается', t: 'K', why: 'Медицинская пиявка Hirudo medicinalis.' },
+      { clue: 'Заражение через плохо прожаренную говядину с финнами', t: 'P', why: 'Бычий цепень, ленточный червь.' },
+      { clue: 'Промежуточный хозяин: малый прудовик, брюхоногий моллюск', t: 'P', why: 'Печёночный сосальщик из класса сосальщики.' },
+      { clue: 'Окончательные хозяева: собака, волк, шакал, лиса. Человек промежуточный', t: 'P', why: 'Эхинококк, ленточный червь. Человек для него промежуточный хозяин (факультативный).' },
+      { clue: 'Яйца с немытых овощей. Личинки идут через печень, сердце и лёгкие, вызывают кашель', t: 'N', why: 'Аскарида: круглый червь, смены хозяина нет.' },
+      { clue: 'Сильный зуд в области заднего прохода, энтеробиоз у детей', t: 'N', why: 'Острица.' },
+      { clue: 'Промежуточный хозяин: рачок циклоп. Самка достигает 120 см', t: 'N', why: 'Ришта, круглый червь. Самка живёт в подкожной жировой клетчатке.' }
+    ] },
+    { name: 'Финал-блиц', eyebrow: 'Всё вперемешку', hint: 'Рисунки, признаки и паразиты в одной куче.', cards: [
+      { art: 'lug', label: 'Пескожил', t: 'K', why: 'Многощетинковый кольчец (полихета), живёт на песчаном дне.' },
+      { clue: 'Тело из одинаковых члеников: гомономная сегментация', t: 'K', why: 'Сегментация впервые появилась у кольчатых.' },
+      { clue: 'Массово выползают на поверхность во время дождя. Рыхлят почву', t: 'K', why: 'Дождевые черви. Причины выхода: холод и нехватка кислорода в почве.' },
+      { clue: 'Две присоски: околоротовая и задняя', t: 'K', why: 'Пиявки: околоротовая (передняя) присоска окружает рот, вторая задняя.' },
+      { art: 'broad', label: 'Широкий лентец', t: 'P', why: 'Ленточный плоский червь. Хозяева: циклопы, рыбы, человек.' },
+      { clue: 'Тегумент защищает от переваривания ферментами хозяина', t: 'P', why: 'Особый плотный эпителий ленточных червей.' },
+      { art: 'echino', label: 'Эхинококк', t: 'P', why: 'Ленточный червь. Окончательные хозяева: собака, волк, шакал, лиса.' },
+      { clue: 'Звёздчатые клетки: реснички колеблются, как язычки пламени', t: 'P', why: 'Протонефридии плоских червей.' },
+      { art: 'guinea', label: 'Ришта', t: 'N', why: 'Круглый червь: самка до 120 см, промежуточный хозяин циклоп.' },
+      { art: 'trich', label: 'Трихинелла', t: 'N', why: 'Круглый червь. Вместе с аскаридой, острицей и власоглавом относится к нематодам.' },
+      { clue: 'Яйца развиваются в почве 2–3 недели при 20–25 °C', t: 'N', why: 'Яйца аскариды: нужны воздух, влажность и тепло.' },
+      { clue: 'У паразитов дыхание бескислородное, а особи раздельнополые', t: 'N', why: 'Круглые черви: органов дыхания нет, у паразитов дыхание анаэробное.' }
+    ] }
+  ];
+
+  /* ---------- state ---------- */
+  var $top = document.getElementById('top'), $view = document.getElementById('view'), st;
+  var BEST_KEY = 'worm-sorter-best';
+  function getBest() { try { return parseInt(localStorage.getItem(BEST_KEY), 10) || 0; } catch (e) { return 0; } }
+  function setBest(v) { try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) { /* storage unavailable */ } }
+  function shuffle(a) { var i, j, t; for (i = a.length - 1; i > 0; i--) { j = Math.floor(Math.random() * (i + 1)); t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+  var HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 C 4 14.5 2 11 2 8 a5 5 0 0 1 10 -1.5 a5 5 0 0 1 10 1.5 c0 3 -2 6.5 -10 13Z" fill="FILL" stroke="var(--p)" stroke-width="2" stroke-linejoin="round"/></svg>';
+  var STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7L12 17.8 5.8 21.2l1.4-7L2 9.4l7-.9z" fill="FILL" stroke="var(--g)" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+
+  function paintTop() {
+    var i, h = '', p = '', r = st.view === 'start' ? -1 : st.r;
+    if (st.view === 'start' || st.view === 'final') {
+      $top.innerHTML = '<div class="top-row"><span class="tag">Тип · Черви</span>' +
+        '<div class="stats"><span class="score"><small>очки</small>' + st.score + '</span></div></div>';
+      return;
+    }
+    for (i = 0; i < 3; i++) { h += HEART.replace('FILL', i < st.lives ? 'var(--p)' : 'none'); }
+    for (i = 0; i < ROUNDS.length; i++) { p += '<span class="pip ' + (i < st.r || (i === st.r && st.view === 'result' && st.passed) ? 'done' : i === st.r ? 'now' : '') + '"></span>'; }
+    $top.innerHTML = '<div class="top-row"><span class="tag">Раунд ' + (r + 1) + ' из ' + ROUNDS.length + '</span>' +
+      '<div class="stats"><span class="score"><small>очки</small>' + st.score + '</span><span class="hearts" role="img" aria-label="Жизней: ' + st.lives + '">' + h + '</span></div></div>' +
+      '<div class="pips" aria-hidden="true">' + p + '</div>';
+  }
+
+  function binsHtml(interactive) {
+    return ['K', 'P', 'N'].map(function (k) {
+      var T = TYPES[k];
+      return '<button class="bin ' + T.c + '" data-t="' + k + '"' + (interactive ? '' : ' disabled') + '><kbd>' + T.key + '</kbd>' + BIN[k] + '<span>' + T.n + '</span></button>';
+    }).join('');
+  }
+
+  /* ---------- views ---------- */
+  function viewStart() {
+    st.view = 'start'; paintTop();
+    var best = getBest();
+    $view.innerHTML = '<section class="panel hero"><h1>Червячный <em>сортировщик</em></h1>' +
+      '<p class="lead">Раскладывай рисунки, ароморфозы и признаки по трём типам червей. Пять раундов, от простых к хитрым.</p>' +
+      '<div class="legend">' + ['K', 'P', 'N'].map(function (k) { return '<div class="bin ' + TYPES[k].c + '">' + BIN[k] + '<span>' + TYPES[k].n + '</span></div>'; }).join('') + '</div>' +
+      '<ul class="rules"><li>В каждом раунде три жизни. Ошибка забирает одну.</li><li>Верные ответы подряд дают бонусные очки.</li><li>Клавиши 1, 2, 3 выбирают корзину.</li></ul>' +
+      '<button class="btn" id="go">Играть</button>' + (best ? '<span class="best">Лучший результат: ' + best + '</span>' : '') + '</section>';
+    document.getElementById('go').onclick = newGame;
+  }
+
+  function newGame() { st = { r: 0, score: 0, hits: 0, tries: 0, lives: 3, streak: 0, view: 'play' }; startRound(); }
+
+  function startRound() {
+    var R = ROUNDS[st.r];
+    st.q = shuffle(R.cards.slice()); st.i = 0; st.lives = 3; st.streak = 0; st.base = st.score; st.locked = false; st.view = 'play';
+    paintTop(); renderCard(true);
+  }
+
+  function renderCard(withHead) {
+    var R = ROUNDS[st.r], c = st.q[st.i];
+    st.locked = false;
+    var body = c.art ? '<div class="plate">' + ART[c.art]() + '</div><div class="label">' + c.label + '</div>' : '<div class="clue">' + c.clue + '</div>';
+    var html = '';
+    if (withHead) { html += '<div class="rhead" id="rhead"><span class="rname">' + R.name + '</span><p class="hint">' + R.hint + '</p></div>'; }
+    html += '<div id="stage" style="display:flex;flex-direction:column;gap:14px;margin-top:' + (withHead ? '12px' : '0') + '">' +
+      '<div class="panel card" id="card"><span class="eyebrow">' + R.eyebrow + '</span><span class="count">' + (st.i + 1) + ' / ' + st.q.length + '</span>' + body + '</div>' +
+      '<div class="bins" id="bins">' + binsHtml(true) + '</div>' +
+      '<div class="fb idle" id="fb">Выбери корзину под карточкой</div></div>';
+    if (withHead) { $view.innerHTML = html; } else { document.getElementById('stage').outerHTML = html.replace('margin-top:0', 'margin-top:12px'); }
+    document.getElementById('bins').onclick = function (e) { var b = e.target.closest('.bin'); if (b) { answer(b.getAttribute('data-t')); } };
+  }
+
+  function answer(t) {
+    if (st.locked || st.view !== 'play') { return; }
+    st.locked = true; st.tries++;
+    var c = st.q[st.i], ok = t === c.t, card = document.getElementById('card'), fb = document.getElementById('fb'), pts = 0, head;
+    var last = st.i === st.q.length - 1;
+    Array.prototype.forEach.call(document.querySelectorAll('#bins .bin'), function (b) {
+      var k = b.getAttribute('data-t'); b.disabled = true;
+      if (k === c.t) { b.classList.add('key-right'); } else if (k === t) { b.classList.add('key-wrong'); }
+    });
+    if (ok) {
+      st.hits++; st.streak++; pts = 10 + Math.min(st.streak - 1, 5) * 2; st.score += pts; card.classList.add('right');
+      head = '<span class="ok">Верно! +' + pts + '</span>' + (st.streak > 1 ? '<span class="combo">серия ×' + st.streak + '</span>' : '');
+    } else {
+      st.lives--; st.streak = 0; card.classList.add('wrong');
+      head = '<span class="bad">Это ' + TYPES[c.t].n.toLowerCase() + ' черви</span>';
+    }
+    paintTop();
+    var done = last || st.lives === 0;
+    fb.className = 'fb';
+    fb.innerHTML = '<div class="head">' + head + '</div><p>' + c.why + '</p><button class="btn" id="next">' + (done ? 'Итоги раунда' : 'Дальше') + '</button>';
+    var nb = document.getElementById('next');
+    nb.onclick = function () { if (done) { viewResult(); } else { st.i++; renderCard(false); } };
+    try { nb.focus({ preventScroll: true }); } catch (e) { nb.focus(); }
+  }
+
+  function viewResult() {
+    var i, s = '', passed = st.lives > 0, lastRound = st.r === ROUNDS.length - 1, gain = st.score - st.base;
+    st.view = 'result'; st.passed = passed; paintTop();
+    for (i = 0; i < 3; i++) { s += STAR.replace('FILL', i < st.lives ? 'var(--pb)' : 'none'); }
+    $view.innerHTML = '<section class="panel hero"><div class="stars" role="img" aria-label="Звёзд: ' + st.lives + ' из 3">' + s + '</div>' +
+      '<h1>' + (passed ? (st.lives === 3 ? 'Без единой ошибки!' : 'Раунд пройден') : 'Раунд не пройден') + '</h1>' +
+      '<p class="lead">' + (passed ? 'Раунд «' + ROUNDS[st.r].name + '»: +' + gain + ' очков, жизней осталось ' + st.lives + '.' : 'Жизни закончились. Раунд «' + ROUNDS[st.r].name + '» стоит повторить: очки за него сгорят, но ответы ты уже видел.') + '</p>' +
+      '<div class="btns">' + (passed ? '<button class="btn" id="nx">' + (lastRound ? 'Подвести итоги' : 'Следующий раунд') + '</button>' : '') +
+      '<button class="btn' + (passed ? ' alt' : '') + '" id="rt">Сыграть раунд ещё раз</button></div></section>';
+    var nx = document.getElementById('nx');
+    if (nx) { nx.onclick = function () { if (lastRound) { viewFinal(); } else { st.r++; startRound(); } }; }
+    document.getElementById('rt').onclick = function () { st.score = st.base; startRound(); };
+  }
+
+  function viewFinal() {
+    var acc = st.tries ? Math.round(st.hits / st.tries * 100) : 0, best = getBest(), isBest = st.score > best;
+    var rank = acc >= 90 ? 'Кольчатый гуру' : acc >= 75 ? 'Знаток нематод' : acc >= 55 ? 'Планария-стажёр' : 'Личинка-новичок';
+    if (isBest) { setBest(st.score); }
+    st.view = 'final'; paintTop();
+    $view.innerHTML = '<section class="panel hero"><span class="rank">' + rank + '</span><div class="big">' + st.score + '</div>' +
+      '<p class="lead">Точность ' + acc + '%: ' + st.hits + ' верных ответов из ' + st.tries + '.</p>' +
+      '<span class="best">' + (isBest ? 'Новый рекорд!' : 'Лучший результат: ' + best) + '</span>' +
+      '<button class="btn" id="again">Играть снова</button></section>';
+    document.getElementById('again').onclick = newGame;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (!st || st.view !== 'play' || st.locked || e.ctrlKey || e.metaKey || e.altKey) { return; }
+    var k = { '1': 'K', '2': 'P', '3': 'N' }[e.key];
+    if (k) { answer(k); }
+  });
+
+  st = { view: 'start', score: 0, lives: 3, r: 0 };
+  viewStart();
+})();
+</script>
+
+</body></html>
